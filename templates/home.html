@@ -1,24 +1,221 @@
 {% extends "theme/base.html" %}
+
 {% block content %}
 <div class="container-xl">
-  <div class="page-header d-print-none" aria-label="Page header">
-    <div class="container-xl">
-      <div class="row align-items-center">
-        <div class="col">
-          <div class="page-pretitle">Overview</div>
-          <div class="d-flex align-items-center gap-3 flex-wrap d-none d-md-flex">
-            <h2 class="page-title mb-0">Dashboard</h2>
-          </div>
-          <h2 class="page-title mb-0 d-md-none">Dashboard</h2>
+
+  <div class="page-header d-print-none">
+    <div class="row align-items-center">
+      <div class="col">
+        <h2 class="page-title">Dashboard</h2>
+      </div>
+      <div class="col-auto ms-auto d-print-none">
+        <div class="btn-list">
+          <a href="{% url 'inventory_reports' %}" class="btn btn-outline-secondary d-none d-sm-inline-block">
+            <i class="nav-icon fas fa-chart-pie me-1"></i> Reports
+          </a>
+          <a href="{% url 'inventory_create' %}" class="btn btn-primary">
+            <i class="nav-icon fas fa-plus me-1"></i> Add Seed
+          </a>
         </div>
       </div>
     </div>
   </div>
-  <br>
 
-  <div class="card">
-    <div class="card-body text-muted">
-      Dashboard
+  <div class="row row-cards">
+    <div class="col-sm-6 col-lg-3">
+      <div class="card">
+        <div class="card-body">
+          <div class="text-secondary">Total Records</div>
+          <div class="h1 mb-0">{{ total_records }}</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-sm-6 col-lg-3">
+      <div class="card">
+        <div class="card-body">
+          <div class="text-secondary">Available</div>
+          <div class="h1 mb-0 text-success">{{ available }}</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-sm-6 col-lg-3">
+      <div class="card">
+        <div class="card-body">
+          <div class="text-secondary">Low Stock</div>
+          <div class="h1 mb-0 text-warning">{{ low_stock }}</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-sm-6 col-lg-3">
+      <div class="card">
+        <div class="card-body">
+          <div class="text-secondary">Out of Stock</div>
+          <div class="h1 mb-0 text-danger">{{ out_of_stock }}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row row-cards mt-0">
+    <div class="col-sm-6 col-lg-4">
+      <div class="card">
+        <div class="card-body">
+          <div class="text-secondary">Expiring Soon</div>
+          <div class="h1 mb-0 text-warning">{{ expiring_soon }}</div>
+          <div class="text-secondary">Within the next 30 days.</div>
+        </div>
+        <div class="card-footer">
+          <a href="{% url 'seed_expiry' %}?view=soon" class="btn btn-sm btn-outline-warning w-100">
+            View Expiring Seeds
+          </a>
+        </div>
+      </div>
+    </div>
+    <div class="col-sm-6 col-lg-4">
+      <div class="card">
+        <div class="card-body">
+          <div class="text-secondary">Expired</div>
+          <div class="h1 mb-0 text-danger">{{ expired }}</div>
+          <div class="text-secondary">Past their expiration date.</div>
+        </div>
+        <div class="card-footer">
+          <a href="{% url 'seed_expiry' %}?view=expired" class="btn btn-sm btn-outline-danger w-100">
+            View Expired Seeds
+          </a>
+        </div>
+      </div>
+    </div>
+    <div class="col-sm-12 col-lg-4">
+      <div class="card">
+        <div class="card-body">
+          <div class="text-secondary">Stock on hand, by unit</div>
+          {% if quantity_by_unit %}
+          <ul class="list-unstyled mb-0 mt-2">
+            {% for row in quantity_by_unit %}
+            <li class="d-flex justify-content-between align-items-center py-1">
+              <span class="text-secondary">{{ row.unit }}</span>
+              <span class="fw-bold">{{ row.total }}</span>
+            </li>
+            {% endfor %}
+          </ul>
+          {% else %}
+          <div class="h1 mb-0">0</div>
+          <div class="text-secondary">No quantities recorded yet.</div>
+          {% endif %}
+        </div>
+        <div class="card-footer">
+          <a href="{% url 'seed_status' %}" class="btn btn-sm btn-outline-primary w-100">
+            View Seed Status
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row row-cards mt-0">
+    <div class="col-lg-8">
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">Recently Added Seeds</h3>
+          <div class="card-actions">
+            <a href="{% url 'inventory_list' %}" class="btn btn-sm btn-outline-primary">
+              View All Inventory
+            </a>
+          </div>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-vcenter card-table">
+            <thead>
+              <tr>
+                <th>Seed Name</th>
+                <th>Category</th>
+                <th>Quantity</th>
+                <th>Status</th>
+                <th>Added</th>
+                <th class="text-end">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for seed in recent_seeds %}
+              <tr>
+                <td>
+                  {{ seed.seed_name }}
+                  {% if seed.variety %}
+                  <div class="text-secondary">{{ seed.variety }}</div>
+                  {% endif %}
+                </td>
+                <td>{{ seed.get_category_display }}</td>
+                <td>{{ seed.quantity }} {{ seed.get_unit_display }}</td>
+                <td>
+                  {% if seed.stock_status == "Out of Stock" %}
+                  <span class="badge bg-danger text-white">{{ seed.stock_status }}</span>
+                  {% elif seed.stock_status == "Low Stock" %}
+                  <span class="badge bg-warning text-dark">{{ seed.stock_status }}</span>
+                  {% else %}
+                  <span class="badge bg-success text-white">{{ seed.stock_status }}</span>
+                  {% endif %}
+                </td>
+                <td class="text-secondary">{{ seed.date_added|date:"M d, Y" }}</td>
+                <td class="text-end">
+                  <a href="{% url 'inventory_edit' seed.pk %}" class="btn btn-sm btn-primary">Edit</a>
+                  <a href="{% url 'inventory_delete' seed.pk %}" class="btn btn-sm btn-outline-danger">Delete</a>
+                </td>
+              </tr>
+              {% empty %}
+              <tr>
+                <td colspan="6" class="text-center text-secondary py-5">
+                  No seeds have been added yet.
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-4">
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">Needs Attention</h3>
+          <span class="badge bg-warning text-dark ms-2">{{ attention_count }}</span>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-vcenter card-table">
+            <tbody>
+              {% for row in attention %}
+              <tr>
+                <td>
+                  {{ row.seed.seed_name }}
+                  <div class="text-secondary">{{ row.seed.quantity }} {{ row.seed.get_unit_display }}</div>
+                </td>
+                <td>
+                  <span class="badge bg-{{ row.tone }} text-white">{{ row.reason }}</span>
+                </td>
+                <td class="text-end">
+                  <a href="{% url 'inventory_edit' row.seed.pk %}" class="btn btn-sm btn-outline-primary">Open</a>
+                </td>
+              </tr>
+              {% empty %}
+              <tr>
+                <td class="text-center text-secondary py-5">
+                  {% if total_records %}
+                  Nothing needs attention right now.
+                  {% else %}
+                  Add seed records to see low-stock and expiry alerts here.
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        <div class="card-footer">
+          <a href="{% url 'inventory_list' %}?status=low" class="btn btn-sm btn-outline-warning w-100">
+            Filter inventory by low stock
+          </a>
+        </div>
+      </div>
     </div>
   </div>
 

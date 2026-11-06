@@ -3,11 +3,11 @@
     <div class="navbar-brand navbar-brand-autodark dh-brand">
       <a href="." class="d-flex align-items-center gap-2 text-decoration-none">
         <span class="dh-brand-mark">
-          <i class="fa-solid fa-shield-halved"></i>
+          <i class="fa-solid fa-seedling"></i>
         </span>
         <span class="lh-1">
-          <span class="dh-brand-name">Project<span class="text-warning">V3</span></span>
-          <span class="dh-brand-sub">Management System</span>
+          <span class="dh-brand-name">Seed<span class="text-warning">Vault</span></span>
+          <span class="dh-brand-sub">Seed Inventory Tracking System</span>
         </span>
       </a>
     </div>
@@ -38,6 +38,66 @@
               <i class="fa fa-dashboard"></i>
             </span>
             <span class="nav-link-title">Dashboard</span>
+          </a>
+        </li>
+
+        <li class="nav-item">
+          <span class="dh-nav-section">
+            Seed Inventory
+          </span>
+        </li>
+
+        <li class="nav-item">
+          <a class="nav-link {% if request.resolver_match.url_name == 'inventory_list' or request.resolver_match.url_name == 'inventory_create' or request.resolver_match.url_name == 'inventory_edit' or request.resolver_match.url_name == 'inventory_delete' %}active{% endif %}" href="{% url 'inventory_list' %}">
+            <span class="nav-link-icon d-md-none d-lg-inline-block">
+              <i class="nav-icon fas fa-boxes-packing"></i>
+            </span>
+            <span class="nav-link-title">Inventory</span>
+          </a>
+        </li>
+
+        <li class="nav-item">
+          <a class="nav-link {% if request.resolver_match.url_name == 'seed_categories' %}active{% endif %}" href="{% url 'seed_categories' %}">
+            <span class="nav-link-icon d-md-none d-lg-inline-block">
+              <i class="nav-icon fas fa-layer-group"></i>
+            </span>
+            <span class="nav-link-title">Categories</span>
+          </a>
+        </li>
+
+        <li class="nav-item">
+          <a class="nav-link {% if request.resolver_match.url_name == 'storage_locations' %}active{% endif %}" href="{% url 'storage_locations' %}">
+            <span class="nav-link-icon d-md-none d-lg-inline-block">
+              <i class="nav-icon fas fa-warehouse"></i>
+            </span>
+            <span class="nav-link-title">Storage Locations</span>
+          </a>
+        </li>
+
+        <li class="nav-item">
+          <a class="nav-link {% if request.resolver_match.url_name == 'seed_status' %}active{% endif %}" href="{% url 'seed_status' %}">
+            <span class="nav-link-icon d-md-none d-lg-inline-block">
+              <i class="nav-icon fas fa-clipboard-list"></i>
+            </span>
+            <span class="nav-link-title">Seed Status</span>
+          </a>
+        </li>
+
+        <li class="nav-item">
+          <a class="nav-link {% if request.resolver_match.url_name == 'seed_expiry' %}active{% endif %}" href="{% url 'seed_expiry' %}">
+            <span class="nav-link-icon d-md-none d-lg-inline-block">
+              <i class="nav-icon fas fa-calendar-days"></i>
+            </span>
+            <span class="nav-link-title">Expiry Tracking</span>
+          </a>
+        </li>
+
+        <li class="nav-item">
+          <a class="nav-link {% if request.resolver_match.url_name == 'inventory_reports' %}active{% endif %}" href="{% url 'inventory_reports' %}">
+            <span class="nav-link-icon d-md-none d-lg-inline-block">
+              <i class="nav-icon fas fa-chart-pie"></i>
+            </span>
+            <span class="nav-link-title">Reports</span>
           </a>
         </li>
 

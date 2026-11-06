@@ -3,3 +3,5 @@ __pycache__/
 *.py[cod]
 .env
 db.sqlite3
+mysite/settings_preview.py
+preview.sqlite3

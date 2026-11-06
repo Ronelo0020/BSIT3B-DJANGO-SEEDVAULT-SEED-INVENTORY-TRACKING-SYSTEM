@@ -132,23 +132,162 @@
             </div></div>
         </div>
         <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">Quantity on hand, by unit</h3>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-vcenter card-table">
+                        <thead>
+                            <tr>
+                                <th>Unit</th>
+                                <th>Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in quantity_by_unit %}
+                            <tr>
+                                <td>{{ row.unit }}</td>
+                                <td>{{ row.total }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="2" class="text-center py-4">
+                                    No quantities recorded yet.
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="card-body text-secondary">
+                    Packets, grams and kilograms are reported separately — they are
+                    different measures and are never added together.
+                </div>
+            </div>
+        </div>
+    </div>
+    {% elif kind == "expiry" %}
+    <div class="row row-cards mb-4">
+        <div class="col-sm-4">
             <div class="card"><div class="card-body">
-                <div class="text-secondary">Total Quantity</div>
-                <div class="h1">{{ total_quantity }}</div>
-                <p class="text-secondary mb-0">
-                    Sum of quantities across all recorded units.
-                </p>
+                <div class="text-secondary">Expiring Soon</div>
+                <div class="h1 mb-0">{{ expiring_soon|length }}</div>
             </div></div>
+        </div>
+        <div class="col-sm-4">
+            <div class="card"><div class="card-body">
+                <div class="text-secondary">Expired</div>
+                <div class="h1 mb-0">{{ expired|length }}</div>
+            </div></div>
+        </div>
+        <div class="col-sm-4">
+            <div class="card"><div class="card-body">
+                <div class="text-secondary">No Expiration Date</div>
+                <div class="h1 mb-0">{{ missing_date }}</div>
+            </div></div>
+        </div>
+    </div>
+
+    <ul class="nav nav-pills mb-4">
+        <li class="nav-item">
+            <a class="nav-link {% if active_view == 'all' %}active{% endif %}"
+               href="{% url 'seed_expiry' %}">All ({{ at_risk_count }})</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link {% if active_view == 'soon' %}active{% endif %}"
+               href="{% url 'seed_expiry' %}?view=soon">Expiring soon ({{ expiring_soon|length }})</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link {% if active_view == 'expired' %}active{% endif %}"
+               href="{% url 'seed_expiry' %}?view=expired">Expired ({{ expired|length }})</a>
+        </li>
+    </ul>
+
+    {% if active_view != 'expired' %}
+    <div class="card mb-4">
+        <div class="card-header">
+            <h3 class="card-title">Expiring Soon</h3>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-vcenter card-table">
+                <thead>
+                    <tr>
+                        <th>Seed Name</th>
+                        <th>Category</th>
+                        <th>Quantity</th>
+                        <th>Location</th>
+                        <th>Expiration Date</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for seed in expiring_soon %}
+                    <tr>
+                        <td>{{ seed.seed_name }}</td>
+                        <td>{{ seed.get_category_display }}</td>
+                        <td>{{ seed.quantity }} {{ seed.get_unit_display }}</td>
+                        <td>{{ seed.storage_location|default:"—" }}</td>
+                        <td>
+                            <span class="badge bg-warning text-dark">
+                                {{ seed.expiration_date|date:"M d, Y" }}
+                            </span>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5" class="text-center py-4">
+                            No seeds are expiring within this window.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
     </div>
     {% endif %}
 
-    <div class="mt-4">
-        <a href="{% url 'dashboard' %}"
-           class="btn btn-outline-secondary">
-            Back to Dashboard
-        </a>
+    {% if active_view != 'soon' %}
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">Expired</h3>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-vcenter card-table">
+                <thead>
+                    <tr>
+                        <th>Seed Name</th>
+                        <th>Category</th>
+                        <th>Quantity</th>
+                        <th>Location</th>
+                        <th>Expiration Date</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for seed in expired %}
+                    <tr>
+                        <td>{{ seed.seed_name }}</td>
+                        <td>{{ seed.get_category_display }}</td>
+                        <td>{{ seed.quantity }} {{ seed.get_unit_display }}</td>
+                        <td>{{ seed.storage_location|default:"—" }}</td>
+                        <td>
+                            <span class="badge bg-danger text-white">
+                                {{ seed.expiration_date|date:"M d, Y" }}
+                            </span>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5" class="text-center py-4">
+                            No expired seed records.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
     </div>
+    {% endif %}
+    {% endif %}
 
 </div>
 {% endblock %}

@@ -1,5 +1,6 @@
-
 from django.db import models
+
+LOW_STOCK_THRESHOLD = 10
 
 
 class SeedInventory(models.Model):
@@ -49,4 +50,12 @@ class SeedInventory(models.Model):
 
     @property
     def is_low_stock(self):
-        return self.quantity <= 10
+        return 0 < self.quantity <= LOW_STOCK_THRESHOLD
+
+    @property
+    def stock_status(self):
+        if self.quantity == 0:
+            return "Out of Stock"
+        if self.quantity <= LOW_STOCK_THRESHOLD:
+            return "Low Stock"
+        return "Available"

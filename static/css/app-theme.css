@@ -47,6 +47,64 @@
   --tblr-primary-rgb: 99, 102, 241;
 }
 
+/* The Theme panel offers 12 swatches but only indigo had a rule, so the other
+   eleven were dead controls. These use Tabler's own --tblr-<name> values, which
+   is what each swatch square paints. */
+[data-bs-theme-primary="blue"] {
+  --tblr-primary: #066fd1;
+  --tblr-primary-rgb: 6, 111, 209;
+}
+
+[data-bs-theme-primary="azure"] {
+  --tblr-primary: #4299e1;
+  --tblr-primary-rgb: 66, 153, 225;
+}
+
+[data-bs-theme-primary="purple"] {
+  --tblr-primary: #ae3ec9;
+  --tblr-primary-rgb: 174, 62, 201;
+}
+
+[data-bs-theme-primary="pink"] {
+  --tblr-primary: #d6336c;
+  --tblr-primary-rgb: 214, 51, 108;
+}
+
+[data-bs-theme-primary="red"] {
+  --tblr-primary: #d63939;
+  --tblr-primary-rgb: 214, 57, 57;
+}
+
+[data-bs-theme-primary="orange"] {
+  --tblr-primary: #f76707;
+  --tblr-primary-rgb: 247, 103, 7;
+}
+
+[data-bs-theme-primary="yellow"] {
+  --tblr-primary: #f59f00;
+  --tblr-primary-rgb: 245, 159, 0;
+}
+
+[data-bs-theme-primary="lime"] {
+  --tblr-primary: #74b816;
+  --tblr-primary-rgb: 116, 184, 22;
+}
+
+[data-bs-theme-primary="green"] {
+  --tblr-primary: #2fb344;
+  --tblr-primary-rgb: 47, 179, 68;
+}
+
+[data-bs-theme-primary="teal"] {
+  --tblr-primary: #0ca678;
+  --tblr-primary-rgb: 12, 166, 120;
+}
+
+[data-bs-theme-primary="cyan"] {
+  --tblr-primary: #17a2b8;
+  --tblr-primary-rgb: 23, 162, 184;
+}
+
 [data-bs-theme="dark"],
 body[data-bs-theme="dark"] [data-bs-theme="light"] {
   --tblr-body-bg: #0e1020;
@@ -239,9 +297,27 @@ html {
     linear-gradient(180deg, #151737 0%, #101224 100%);
 }
 
-.dh-sidebar .navbar-brand {
+/* Tabler's .navbar-vertical.navbar-expand-lg .navbar-brand { padding: .75rem 0;
+   justify-content: center } is 3-class specific, so a plain .dh-sidebar rule loses
+   and the mark lands flush against x=0. Match its selector depth to win. */
+.dh-sidebar.navbar-vertical.navbar-expand-lg .navbar-brand {
   padding: 1.1rem 1.25rem;
+  justify-content: flex-start;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  max-width: 100%;
+  min-width: 0;
+}
+
+/* A flex item's default min-width:auto lets the nowrap label push the whole
+   sidebar into horizontal scroll, which slides the brand mark off-screen. */
+.dh-brand > a {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.dh-brand .lh-1 {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .dh-brand-mark {
@@ -254,7 +330,7 @@ html {
   border-radius: 0.75rem;
   color: #fff;
   font-size: 1rem;
-  background: linear-gradient(135deg, var(--tblr-primary) 0%, #8b5cf6 100%);
+  background: linear-gradient(135deg, var(--tblr-primary) 0%, color-mix(in srgb, var(--tblr-primary) 55%, white) 100%);
   box-shadow: 0 6px 16px -6px color-mix(in srgb, var(--tblr-primary) 80%, transparent);
 }
 
@@ -269,11 +345,14 @@ html {
 
 .dh-brand-sub {
   display: block;
-  font-size: 0.68rem;
+  font-size: 0.64rem;
   font-weight: 600;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.02em;
   text-transform: uppercase;
   color: rgba(255, 255, 255, 0.45);
+  white-space: normal;
+  overflow-wrap: break-word;
+  line-height: 1.25;
 }
 
 .dh-nav-section {
@@ -662,4 +741,12 @@ html {
   .dh-hero-title {
     font-size: 1.3rem;
   }
+}
+
+/* Tabler pins .btn-floating to bottom-LEFT (tabler.css:18445), which drops the
+   theme toggler straight onto the sidebar user card. Move it clear of the rail. */
+.settings .btn-floating {
+  left: auto;
+  right: 1rem;
+  bottom: 1rem;
 }

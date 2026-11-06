@@ -10,6 +10,7 @@ urlpatterns = [
     path("register/", views.register_view, name="register"),
 
     path("inventory/", views.inventory_list, name="inventory_list"),
+    path("inventory/export/", views.inventory_export, name="inventory_export"),
     path("inventory/add/", views.inventory_create, name="inventory_create"),
     path(
         "inventory/<int:pk>/edit/",
@@ -41,5 +42,11 @@ urlpatterns = [
         "reports/",
         views.inventory_reports,
         name="inventory_reports",
+    ),
+
+    path(
+        "expiry/",
+        views.seed_expiry,
+        name="seed_expiry",
     ),
 ]
