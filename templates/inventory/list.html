@@ -1,16 +1,76 @@
-```html
 {% extends "theme/base.html" %}
 
 {% block content %}
 <div class="container-fluid">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <div>
-            <h1 class="h2">Seed Inventory</h1>
-            <p class="text-secondary">Manage and monitor your seed stocks.</p>
+    <div class="page-header d-print-none mb-3">
+        <div class="row align-items-center">
+            <div class="col">
+                <h1 class="h2">Seed Inventory</h1>
+                <p class="text-secondary mb-0">
+                    {{ result_count }} record{{ result_count|pluralize }}
+                    {% if is_filtered %}matching your filter{% else %}in the vault{% endif %}.
+                </p>
+            </div>
+            <div class="col-auto ms-auto d-print-none">
+                <div class="btn-list">
+                    <a href="{% url 'inventory_export' %}{% if query_string %}?{{ query_string }}{% endif %}"
+                       class="btn btn-outline-secondary">
+                        <i class="fas fa-file-csv me-1"></i> Export CSV
+                    </a>
+                    <a href="{% url 'inventory_create' %}" class="btn btn-primary">
+                        <i class="fas fa-plus me-1"></i> Add Seed
+                    </a>
+                </div>
+            </div>
         </div>
-        <a href="{% url 'inventory_create' %}" class="btn btn-success">
-            + Add Seed
-        </a>
+    </div>
+
+    <div class="card mb-3">
+        <div class="card-body">
+            <form method="get" class="row g-2 align-items-end">
+                <div class="col-12 col-md-4">
+                    <label class="form-label" for="filter-q">Search</label>
+                    <input type="search" id="filter-q" name="q" class="form-control"
+                           placeholder="Name, variety, location or notes"
+                           value="{{ active.q|default:'' }}">
+                </div>
+                <div class="col-6 col-md-2">
+                    <label class="form-label" for="filter-category">Category</label>
+                    <select id="filter-category" name="category" class="form-select">
+                        <option value="">All</option>
+                        {% for value, label in category_choices %}
+                        <option value="{{ value }}" {% if active.category == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-6 col-md-2">
+                    <label class="form-label" for="filter-location">Location</label>
+                    <select id="filter-location" name="location" class="form-select">
+                        <option value="">All</option>
+                        {% for name in location_choices %}
+                        <option value="{{ name }}" {% if active.location == name %}selected{% endif %}>{{ name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-6 col-md-2">
+                    <label class="form-label" for="filter-status">Status</label>
+                    <select id="filter-status" name="status" class="form-select">
+                        <option value="">All</option>
+                        <option value="available" {% if active.status == 'available' %}selected{% endif %}>Available</option>
+                        <option value="low" {% if active.status == 'low' %}selected{% endif %}>Low Stock</option>
+                        <option value="out" {% if active.status == 'out' %}selected{% endif %}>Out of Stock</option>
+                    </select>
+                </div>
+                <div class="col-6 col-md-2">
+                    <div class="btn-list flex-nowrap">
+                        <button type="submit" class="btn btn-primary">Filter</button>
+                        {% if is_filtered %}
+                        <a href="{% url 'inventory_list' %}" class="btn btn-outline-secondary">Clear</a>
+                        {% endif %}
+                    </div>
+                </div>
+            </form>
+        </div>
     </div>
 
     <div class="card">
@@ -25,7 +85,8 @@
                         <th>Unit</th>
                         <th>Location</th>
                         <th>Expiration Date</th>
-                        <th>Actions</th>
+                        <th>Status</th>
+                        <th class="text-end">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -34,34 +95,70 @@
                         <td>{{ seed.seed_name }}</td>
                         <td>{{ seed.variety|default:"—" }}</td>
                         <td>{{ seed.get_category_display }}</td>
-                        <td>
-                            {{ seed.quantity }}
-                            {% if seed.is_low_stock %}
-                            <span class="badge bg-warning text-dark">Low Stock</span>
-                            {% endif %}
-                        </td>
+                        <td>{{ seed.quantity }}</td>
                         <td>{{ seed.get_unit_display }}</td>
                         <td>{{ seed.storage_location|default:"—" }}</td>
                         <td>{{ seed.expiration_date|default:"—" }}</td>
                         <td>
+                            {% if seed.stock_status == "Out of Stock" %}
+                            <span class="badge bg-danger text-white">{{ seed.stock_status }}</span>
+                            {% elif seed.stock_status == "Low Stock" %}
+                            <span class="badge bg-warning text-dark">{{ seed.stock_status }}</span>
+                            {% else %}
+                            <span class="badge bg-success text-white">{{ seed.stock_status }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end">
                             <a href="{% url 'inventory_edit' seed.pk %}"
                                class="btn btn-sm btn-primary">Edit</a>
                             <a href="{% url 'inventory_delete' seed.pk %}"
-                               class="btn btn-sm btn-danger">Delete</a>
+                               class="btn btn-sm btn-outline-danger">Delete</a>
                         </td>
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="8" class="text-center text-secondary py-5">
+                        <td colspan="9" class="text-center text-secondary py-5">
+                            {% if is_filtered %}
+                            No seeds match this filter.
+                            <a href="{% url 'inventory_list' %}">Clear the filter</a>.
+                            {% else %}
                             No seeds have been added yet. Click
                             <strong>+ Add Seed</strong> to get started.
+                            {% endif %}
                         </td>
                     </tr>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
+        {% if paginator.num_pages > 1 %}
+        <div class="card-footer d-flex justify-content-between align-items-center">
+            <div class="text-secondary">
+                Page {{ page_obj.number }} of {{ paginator.num_pages }}
+            </div>
+            <ul class="pagination pagination-sm m-0">
+                {% if page_obj.has_previous %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ page_obj.previous_page_number }}&{{ query_string }}">Previous</a>
+                </li>
+                {% endif %}
+                {% for num in paginator.page_range %}
+                {% if num == page_obj.number %}
+                <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+                {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ num }}&{{ query_string }}">{{ num }}</a>
+                </li>
+                {% endif %}
+                {% endfor %}
+                {% if page_obj.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ page_obj.next_page_number }}&{{ query_string }}">Next</a>
+                </li>
+                {% endif %}
+            </ul>
+        </div>
+        {% endif %}
     </div>
 </div>
 {% endblock %}
-```

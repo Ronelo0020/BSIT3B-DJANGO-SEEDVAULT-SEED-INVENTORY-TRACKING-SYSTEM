@@ -1,3 +1,4 @@
+import csv
 from datetime import timedelta
 
 from django.contrib import messages
@@ -5,12 +6,15 @@ from django.contrib.auth import authenticate, get_user_model, login, logout
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
+from django.core.paginator import Paginator
 from django.core.validators import validate_email
+from django.db.models import Count, Q, Sum
+from django.http import HttpResponse, QueryDict
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 
-from .models import SeedInventory
+from .models import SeedInventory, LOW_STOCK_THRESHOLD
 from .forms import SeedInventoryForm
 
 
@@ -20,6 +24,69 @@ MAX_FAILED_ATTEMPTS = 5
 LOCK_DURATION = timedelta(minutes=1)
 INVALID_LOGIN_MESSAGE = 'Invalid username or password.'
 LOCKED_MESSAGE = 'Too many failed attempts. Locked for 1 minute.'
+
+INVENTORY_PAGE_SIZE = 25
+EXPIRY_WINDOW_DAYS = 30
+STATUS_FILTERS = {
+    "available": {"quantity__gt": LOW_STOCK_THRESHOLD},
+    "low": {"quantity__gt": 0, "quantity__lte": LOW_STOCK_THRESHOLD},
+    "out": {"quantity": 0},
+}
+
+
+def _query_string(params):
+    query = QueryDict("", mutable=True)
+    for key, value in params.items():
+        query[key] = value
+    return query.urlencode()
+
+
+def _quantity_by_unit(seeds):
+    labels = dict(SeedInventory.UNIT_CHOICES)
+    rows = [
+        {
+            "unit": labels.get(row["unit"], row["unit"]),
+            "total": row["total"] or 0,
+        }
+        for row in seeds.values("unit").annotate(total=Sum("quantity"))
+    ]
+    rows.sort(key=lambda row: row["total"], reverse=True)
+    return rows
+
+
+def _filter_seeds(request, seeds=None):
+    """Shared q / category / location / status filtering for the list and export."""
+    if seeds is None:
+        seeds = SeedInventory.objects.all()
+
+    params = {}
+
+    q = request.GET.get("q", "").strip()
+    if q:
+        seeds = seeds.filter(
+            Q(seed_name__icontains=q)
+            | Q(variety__icontains=q)
+            | Q(storage_location__icontains=q)
+            | Q(notes__icontains=q)
+        )
+        params["q"] = q
+
+    category = request.GET.get("category", "").strip()
+    if category in dict(SeedInventory.CATEGORY_CHOICES):
+        seeds = seeds.filter(category=category)
+        params["category"] = category
+
+    location = request.GET.get("location", "").strip()
+    if location:
+        seeds = seeds.filter(storage_location__iexact=location)
+        params["location"] = location
+
+    status = request.GET.get("status", "").strip()
+    if status in STATUS_FILTERS:
+        seeds = seeds.filter(**STATUS_FILTERS[status])
+        params["status"] = status
+
+    return seeds.order_by("seed_name"), params
 
 
 # LOGIN LOCK FUNCTIONS
@@ -188,30 +255,39 @@ def welcome(request):
 @login_required
 def home(request):
     today = timezone.localdate()
+    window_end = today + timedelta(days=EXPIRY_WINDOW_DAYS)
     seeds = SeedInventory.objects.all()
 
     total_records = seeds.count()
-    out_of_stock = seeds.filter(quantity=0).count()
-    low_stock = seeds.filter(
-        quantity__gt=0,
-        quantity__lte=10
-    ).count()
-    available = seeds.filter(quantity__gt=10).count()
+    out_of_stock = seeds.filter(**STATUS_FILTERS["out"]).count()
+    low_stock = seeds.filter(**STATUS_FILTERS["low"]).count()
+    available = seeds.filter(**STATUS_FILTERS["available"]).count()
 
     expiring_soon = seeds.filter(
         expiration_date__gte=today,
-        expiration_date__lte=today + timedelta(days=30)
+        expiration_date__lte=window_end,
     ).count()
 
     expired = seeds.filter(
         expiration_date__lt=today
     ).count()
 
-    total_quantity = sum(
-        seed.quantity for seed in seeds
-    )
-
-    recent_seeds = seeds.order_by("-date_added")[:5]
+    attention = []
+    for seed in seeds.filter(
+        Q(**STATUS_FILTERS["out"])
+        | Q(**STATUS_FILTERS["low"])
+        | Q(expiration_date__lt=today)
+        | Q(expiration_date__gte=today, expiration_date__lte=window_end)
+    ).order_by("seed_name"):
+        if seed.quantity == 0:
+            reason, tone = "Out of stock", "danger"
+        elif seed.expiration_date and seed.expiration_date < today:
+            reason, tone = "Expired", "danger"
+        elif seed.quantity <= LOW_STOCK_THRESHOLD:
+            reason, tone = "Low stock", "warning"
+        else:
+            reason, tone = "Expiring soon", "warning"
+        attention.append({"seed": seed, "reason": reason, "tone": tone})
 
     context = {
         "total_records": total_records,
@@ -220,8 +296,10 @@ def home(request):
         "out_of_stock": out_of_stock,
         "expiring_soon": expiring_soon,
         "expired": expired,
-        "total_quantity": total_quantity,
-        "recent_seeds": recent_seeds,
+        "quantity_by_unit": _quantity_by_unit(seeds),
+        "attention": attention[:8],
+        "attention_count": len(attention),
+        "recent_seeds": seeds.order_by("-date_added")[:5],
     }
 
     return render(request, "home.html", context)
@@ -271,13 +349,65 @@ def register_view(request):
 
 @login_required(login_url='login')
 def inventory_list(request):
-    seeds = SeedInventory.objects.all()
+    seeds, params = _filter_seeds(request)
+
+    paginator = Paginator(seeds, INVENTORY_PAGE_SIZE)
+    page = paginator.get_page(request.GET.get("page"))
 
     return render(
         request,
         'inventory/list.html',
-        {'seeds': seeds}
+        {
+            'seeds': page.object_list,
+            'page_obj': page,
+            'paginator': paginator,
+            'is_filtered': bool(params),
+            'result_count': paginator.count,
+            'query_string': _query_string(params),
+            'category_choices': SeedInventory.CATEGORY_CHOICES,
+            'location_choices': (
+                SeedInventory.objects
+                .exclude(storage_location='')
+                .values_list('storage_location', flat=True)
+                .distinct()
+                .order_by('storage_location')
+            ),
+            'active': params,
+        }
     )
+
+
+@login_required(login_url='login')
+def inventory_export(request):
+    seeds, _ = _filter_seeds(request)
+
+    category_labels = dict(SeedInventory.CATEGORY_CHOICES)
+    unit_labels = dict(SeedInventory.UNIT_CHOICES)
+
+    response = HttpResponse(content_type='text/csv; charset=utf-8')
+    response['Content-Disposition'] = (
+        f'attachment; filename="seed_inventory_{timezone.localdate():%Y%m%d}.csv"'
+    )
+
+    writer = csv.writer(response)
+    writer.writerow([
+        'Seed Name', 'Variety', 'Category', 'Quantity', 'Unit',
+        'Storage Location', 'Expiration Date', 'Status', 'Notes',
+    ])
+    for seed in seeds:
+        writer.writerow([
+            seed.seed_name,
+            seed.variety,
+            category_labels.get(seed.category, seed.category),
+            seed.quantity,
+            unit_labels.get(seed.unit, seed.unit),
+            seed.storage_location,
+            seed.expiration_date.isoformat() if seed.expiration_date else '',
+            seed.stock_status,
+            seed.notes,
+        ])
+
+    return response
 
 
 # ADD SEED
@@ -298,6 +428,7 @@ def inventory_create(request):
     return render(request, "inventory/form.html", {
         "form": form,
         "title": "Add Seed",
+        "submit_label": "Save Seed",
     })
 
 
@@ -319,7 +450,8 @@ def inventory_edit(request, pk):
         'inventory/form.html',
         {
             'form': form,
-            'page_title': 'Edit Seed',
+            'title': 'Edit Seed',
+            'submit_label': 'Update Seed',
         }
     )
 
@@ -365,26 +497,23 @@ def seed_categories(request):
 
 @login_required
 def storage_locations(request):
-    seeds = SeedInventory.objects.exclude(
-        storage_location=""
-    ).exclude(
-        storage_location__isnull=True
+    rows = (
+        SeedInventory.objects
+        .exclude(storage_location="")
+        .values("storage_location")
+        .annotate(count=Count("id"))
     )
 
-    locations = []
-    seen = set()
+    merged = {}
+    for row in rows:
+        name = row["storage_location"].strip()
+        if not name:
+            continue
+        key = name.lower()
+        entry = merged.setdefault(key, {"name": name, "count": 0})
+        entry["count"] += row["count"]
 
-    for seed in seeds.order_by("storage_location"):
-        location = seed.storage_location.strip()
-
-        if location and location.lower() not in seen:
-            seen.add(location.lower())
-            locations.append({
-                "name": location,
-                "count": seeds.filter(
-                    storage_location__iexact=location
-                ).count(),
-            })
+    locations = sorted(merged.values(), key=lambda item: item["name"].lower())
 
     return render(request, "inventory/section.html", {
         "title": "Storage Locations",
@@ -397,24 +526,15 @@ def storage_locations(request):
 @login_required
 def seed_status(request):
     seeds = SeedInventory.objects.all().order_by("seed_name")
-    rows = []
 
-    for seed in seeds:
-        if seed.quantity == 0:
-            status = "Out of Stock"
-        elif seed.quantity <= 10:
-            status = "Low Stock"
-        else:
-            status = "Available"
-
-        rows.append({
-            "seed": seed,
-            "status": status,
-        })
+    rows = [{"seed": seed, "status": seed.stock_status} for seed in seeds]
 
     return render(request, "inventory/section.html", {
         "title": "Seed Status",
-        "description": "Monitor available, low-stock, and out-of-stock seeds.",
+        "description": (
+            f"Monitor available, low-stock (at or below "
+            f"{LOW_STOCK_THRESHOLD} units) and out-of-stock seeds."
+        ),
         "kind": "status",
         "rows": rows,
     })
@@ -424,21 +544,59 @@ def seed_status(request):
 def inventory_reports(request):
     seeds = SeedInventory.objects.all()
 
-    total_records = seeds.count()
-    available = seeds.filter(quantity__gt=10).count()
-    low_stock = seeds.filter(
-        quantity__gt=0, quantity__lte=10
-    ).count()
-    out_of_stock = seeds.filter(quantity=0).count()
-    total_quantity = sum(seed.quantity for seed in seeds)
-
     return render(request, "inventory/section.html", {
         "title": "Reports",
         "description": "Summary of your current seed inventory.",
         "kind": "reports",
-        "total_records": total_records,
-        "available": available,
-        "low_stock": low_stock,
-        "out_of_stock": out_of_stock,
-        "total_quantity": total_quantity,
+        "total_records": seeds.count(),
+        "available": seeds.filter(**STATUS_FILTERS["available"]).count(),
+        "low_stock": seeds.filter(**STATUS_FILTERS["low"]).count(),
+        "out_of_stock": seeds.filter(**STATUS_FILTERS["out"]).count(),
+        "quantity_by_unit": _quantity_by_unit(seeds),
+    })
+
+
+# EXPIRY TRACKING
+
+
+@login_required
+def seed_expiry(request):
+    today = timezone.localdate()
+    window_end = today + timedelta(days=EXPIRY_WINDOW_DAYS)
+
+    dated = SeedInventory.objects.exclude(
+        expiration_date__isnull=True
+    ).order_by("expiration_date")
+
+    expired = dated.filter(expiration_date__lt=today)
+    expiring_soon = dated.filter(
+        expiration_date__gte=today,
+        expiration_date__lte=window_end,
+    )
+    missing_date = SeedInventory.objects.filter(
+        expiration_date__isnull=True
+    ).count()
+
+    active_view = request.GET.get("view", "all")
+    if active_view not in {"all", "expired", "soon"}:
+        active_view = "all"
+
+    titles = {
+        "expired": "Expired Seeds",
+        "soon": f"Expiring Within {EXPIRY_WINDOW_DAYS} Days",
+    }
+
+    return render(request, "inventory/section.html", {
+        "title": titles.get(active_view, "Expiry Tracking"),
+        "description": (
+            f"Seeds expiring within {EXPIRY_WINDOW_DAYS} days "
+            "and those already expired."
+        ),
+        "kind": "expiry",
+        "active_view": active_view,
+        "expired": expired,
+        "expiring_soon": expiring_soon,
+        "at_risk_count": expired.count() + expiring_soon.count(),
+        "missing_date": missing_date,
+        "today": today,
     })
